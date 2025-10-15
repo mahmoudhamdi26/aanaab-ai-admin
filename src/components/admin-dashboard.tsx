@@ -16,6 +16,7 @@ import { NavigationMenu } from "@/components/navigation-menu";
 import { StatusPage } from "@/components/pages/status-page";
 import { LoggingPage } from "@/components/pages/logging-page";
 import TestingPage from "@/components/pages/testing-page";
+import ChatPage from "@/components/pages/chat-page";
 import { Activity, LogOut } from "lucide-react";
 import { AdminConfig } from "@/types/config";
 import { Logo } from "@/components/ui/logo";
@@ -192,6 +193,7 @@ export function AdminDashboard() {
           {activeTab === "status" && <StatusPage />}
           {activeTab === "logging" && <LoggingPage />}
           {activeTab === "testing" && <TestingPage />}
+          {activeTab === "chat" && <ChatPage />}
 
           {/* Settings Pages */}
           {activeTab === "system" && (

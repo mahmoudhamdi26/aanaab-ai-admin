@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Activity, Settings, Database, Shield, Cpu, Zap, RefreshCw, FileText, TestTube, BarChart3, LogOut } from "lucide-react";
+import { ChevronDown, Activity, Settings, Database, Shield, Cpu, Zap, RefreshCw, FileText, TestTube, BarChart3, MessageSquare, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,12 @@ const menuItems: MenuItem[] = [
     id: "testing",
     label: "Testing",
     icon: TestTube,
+    type: 'main'
+  },
+  {
+    id: "chat",
+    label: "Chat",
+    icon: MessageSquare,
     type: 'main'
   },
   {
