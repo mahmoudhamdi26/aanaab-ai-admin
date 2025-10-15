@@ -1,0 +1,180 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Existing tables from the main AI service (read-only access)
+model AlembicVersion {
+  version_num String @id @map("version_num") @db.VarChar(32)
+
+  @@map("alembic_version")
+}
+
+model ChatUser {
+  id           Int      @id @default(autoincrement())
+  keycloak_id  String   @unique @map("keycloak_id")
+  email        String   @unique
+  name         String?
+  created_at   DateTime @default(now()) @map("created_at")
+  updated_at   DateTime? @map("updated_at")
+
+  // Relationships
+  chat_sessions ChatSession[]
+
+  @@map("chat_users")
+}
+
+model ChatSession {
+  id              Int      @id @default(autoincrement())
+  session_uuid    String   @unique @map("session_uuid")
+  user_id         Int      @map("user_id")
+  course_id       String   @map("course_id")
+  course_name     String?  @map("course_name")
+  model_provider  String   @default("openai") @map("model_provider")
+  temperature     Int      @default(7)
+  is_active       Boolean  @default(true) @map("is_active")
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime? @map("updated_at")
+  last_activity_at DateTime @default(now()) @map("last_activity_at")
+
+  // Relationships
+  user ChatUser @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+  summaries ConversationSummary[]
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id               Int      @id @default(autoincrement())
+  session_id       Int      @map("session_id")
+  role             String   // user, assistant, system
+  content          String
+  tokens_used      Int?
+  confidence_score Int?     @map("confidence_score")
+  rag_context_used Boolean  @default(false) @map("rag_context_used")
+  error_message    String?  @map("error_message")
+  created_at       DateTime @default(now()) @map("created_at")
+
+  // Relationships
+  session ChatSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model ConversationSummary {
+  id          Int      @id @default(autoincrement())
+  session_id  Int      @map("session_id")
+  summary     String
+  message_count Int    @map("message_count")
+  created_at  DateTime @default(now()) @map("created_at")
+
+  // Relationships
+  session ChatSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@map("conversation_summaries")
+}
+
+model SyncJob {
+  job_id                    String   @id @map("job_id")
+  status                    String   @default("queued")
+  current_batch             Int?
+  current_course            Int?
+  percent_complete          Float    @default(0.0) @map("percent_complete")
+  error_message             String?  @map("error_message")
+  batch_size                Int?
+  mode                      String?
+  total_courses             Int      @default(0) @map("total_courses")
+  completed_courses         Int      @default(0) @map("completed_courses")
+  failed_courses            Int      @default(0) @map("failed_courses")
+  avg_processing_time_per_course Float? @map("avg_processing_time_per_course")
+  total_processing_time     Float    @default(0.0) @map("total_processing_time")
+  retry_count               Int      @default(0) @map("retry_count")
+  last_error_category       String?  @map("last_error_category")
+  api_calls_made            Int      @default(0) @map("api_calls_made")
+  tokens_used               Int      @default(0) @map("tokens_used")
+  embeddings_generated      Int      @default(0) @map("embeddings_generated")
+  created_at                DateTime @default(now()) @map("created_at")
+  updated_at                DateTime @default(now()) @map("updated_at")
+
+  // Relationships
+  progress SyncJobProgress[]
+
+  @@map("sync_jobs")
+}
+
+model SyncJobProgress {
+  id            Int      @id @default(autoincrement())
+  job_id        String   @map("job_id")
+  course_id     Int      @map("course_id")
+  lesson_id     Int?     @map("lesson_id")
+  chunk_id      Int?     @map("chunk_id")
+  status        String   @default("pending")
+  error_details String?  @map("error_details")
+  completed_at  DateTime? @map("completed_at")
+  created_at    DateTime @default(now()) @map("created_at")
+  updated_at    DateTime @default(now()) @map("updated_at")
+
+  // Relationships
+  job SyncJob @relation(fields: [job_id], references: [job_id], onDelete: Cascade)
+
+  @@map("sync_job_progress")
+}
+
+// New admin-specific tables
+model AdminUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      String   @default("admin") // admin, super_admin
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_users")
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  section   String   @unique // system, llm, embedding, livekit, etc.
+  config    Json     // The actual configuration data
+  version   Int      @default(1)
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+  updated_by String?  @map("updated_by") // Admin user ID who made the change
+
+  @@map("system_configs")
+}
+
+model ConfigHistory {
+  id        String   @id @default(cuid())
+  section   String
+  old_config Json?   @map("old_config")
+  new_config Json    @map("new_config")
+  version   Int
+  updated_by String? @map("updated_by")
+  created_at DateTime @default(now()) @map("created_at")
+
+  @@map("config_history")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  user_id    String?  @map("user_id")
+  action     String   // CREATE, UPDATE, DELETE, SYNC_START, SYNC_COMPLETE, etc.
+  resource   String   // config, user, sync_job, etc.
+  resource_id String? @map("resource_id")
+  details    Json?
+  ip_address String?  @map("ip_address")
+  user_agent String?  @map("user_agent")
+  created_at DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
