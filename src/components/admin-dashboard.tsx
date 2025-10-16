@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SystemConfigPanel } from "@/components/config-panels/system-config";
@@ -23,6 +24,7 @@ import { Logo } from "@/components/ui/logo";
 
 export function AdminDashboard() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [config, setConfig] = useState<Partial<AdminConfig>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
@@ -60,6 +62,14 @@ export function AdminDashboard() {
       }
     } catch (error) {
       console.error("Failed to update config:", error);
+    }
+  };
+
+  const handleTabChange = (tab: string) => {
+    if (tab === "voice-chat") {
+      router.push("/voice-chat");
+    } else {
+      setActiveTab(tab);
     }
   };
 
@@ -117,7 +127,7 @@ export function AdminDashboard() {
           {/* Navigation Menu */}
           <NavigationMenu
             activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={handleTabChange}
             onSignOut={() => signOut()}
             userName={session?.user?.name}
             userEmail={session?.user?.email}
