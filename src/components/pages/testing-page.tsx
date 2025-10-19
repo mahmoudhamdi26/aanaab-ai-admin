@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,9 @@ import {
   FileText,
   Download,
   Eye,
-  AlertCircle
+  AlertCircle,
+  User,
+  Shield
 } from "lucide-react";
 
 // Import modular components
@@ -26,6 +29,7 @@ import { QuestionUpload, Question } from "@/components/testing/QuestionUpload";
 import { TestConfiguration, TestConfig } from "@/components/testing/TestConfiguration";
 import { TestStatusOverview } from "@/components/testing/TestStatusOverview";
 import { BatchTesting, TestScenario } from "@/components/testing/BatchTesting";
+import { GridResults } from "@/components/testing/GridResults";
 
 const getSourceDisplayName = (source: any) => {
   if (typeof source === 'string') {
@@ -55,9 +59,12 @@ const getSourceDisplayName = (source: any) => {
 interface TestResult {
   id: string;
   testType: 'chat' | 'langgraph';
+  endpoint: 'unified' | 'langgraph';
   query: string;
   courseId: string;
   courseName: string;
+  category: string;
+  complexity: 'low' | 'medium' | 'high';
   success: boolean;
   executionTime: number;
   response: string;
@@ -71,55 +78,110 @@ interface TestResult {
   confidenceScore?: number;
   timestamp: string;
   sessionId?: string;
+  status: 'pending' | 'running' | 'completed' | 'error';
 }
 
 // Default test scenarios - diverse courses for localhost testing
 const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
-  // Educational Games Course (Course ID: 89)
+  // التعلم باللعب (Course ID: 89)
   {
     id: "1",
-    query: "What is this course about? Can you give me an overview of the main topics covered?",
+    query: "ما هو هذا المساق؟ هل يمكنك إعطائي نظرة عامة على المواضيع الرئيسية المغطاة؟",
     courseId: "89",
-    courseName: "Educational Games Course",
+    courseName: "التعلم باللعب",
     category: "COURSE_OVERVIEW",
     complexity: "low"
   },
   {
     id: "2",
-    query: "What are the different types of educational games mentioned in this course?",
+    query: "ما هي أنواع الألعاب التعليمية المختلفة المذكورة في هذا المساق؟",
     courseId: "89",
-    courseName: "Educational Games Course",
+    courseName: "التعلم باللعب",
     category: "CONTENT_UNDERSTANDING",
     complexity: "medium"
   },
   {
     id: "3",
-    query: "How can teachers use games to enhance social and cognitive skills in children?",
+    query: "كيف يمكن للمعلمين استخدام الألعاب لتعزيز المهارات الاجتماعية والمعرفية لدى الأطفال؟",
     courseId: "89",
-    courseName: "Educational Games Course",
+    courseName: "التعلم باللعب",
     category: "PRACTICAL_APPLICATION",
     complexity: "medium"
   },
   {
     id: "4",
-    query: "What is the importance of reinforcement in educational games, both positive and negative?",
+    query: "ما أهمية التعزيز في الألعاب التعليمية، سواء كان إيجابياً أم سلبياً؟",
     courseId: "89",
-    courseName: "Educational Games Course",
+    courseName: "التعلم باللعب",
     category: "DETAILED_ANALYSIS",
     complexity: "high"
   },
   {
     id: "5",
-    query: "How should educational games be designed according to children's developmental stages?",
+    query: "كيف يجب تصميم الألعاب التعليمية وفقاً للمراحل التنموية للأطفال؟",
     courseId: "89",
-    courseName: "Educational Games Course",
+    courseName: "التعلم باللعب",
     category: "DESIGN_PRINCIPLES",
     complexity: "high"
   },
 
-  // Machine Learning Fundamentals (Course ID: ml_fundamentals_101)
+  // طرق التدريس الحديثة (Course ID: 62)
   {
     id: "6",
+    query: "ما هي طرق التدريس الحديثة المذكورة في هذا المساق؟",
+    courseId: "62",
+    courseName: "طرق التدريس الحديثة",
+    category: "COURSE_OVERVIEW",
+    complexity: "low"
+  },
+  {
+    id: "7",
+    query: "كيف يمكن تطبيق التعلم النشط في الفصل الدراسي؟",
+    courseId: "62",
+    courseName: "طرق التدريس الحديثة",
+    category: "PRACTICAL_APPLICATION",
+    complexity: "medium"
+  },
+
+  // إعداد الأدوات التعليمية (Course ID: 61)
+  {
+    id: "8",
+    query: "ما هي الأدوات التعليمية الأساسية التي يجب على المعلم إعدادها؟",
+    courseId: "61",
+    courseName: "إعداد الأدوات التعليمية",
+    category: "COURSE_OVERVIEW",
+    complexity: "low"
+  },
+  {
+    id: "9",
+    query: "كيف يمكن تصميم أدوات تعليمية تفاعلية باستخدام التكنولوجيا؟",
+    courseId: "61",
+    courseName: "إعداد الأدوات التعليمية",
+    category: "PRACTICAL_APPLICATION",
+    complexity: "high"
+  },
+
+  // عقلية النمو (Course ID: 64)
+  {
+    id: "10",
+    query: "ما هي عقلية النمو وكيف تختلف عن العقلية الثابتة؟",
+    courseId: "64",
+    courseName: "عقلية النمو",
+    category: "COURSE_OVERVIEW",
+    complexity: "low"
+  },
+  {
+    id: "11",
+    query: "كيف يمكن للمعلمين تطوير عقلية النمو لدى الطلاب؟",
+    courseId: "64",
+    courseName: "عقلية النمو",
+    category: "PRACTICAL_APPLICATION",
+    complexity: "medium"
+  },
+
+  // Machine Learning Fundamentals (Course ID: ml_fundamentals_101)
+  {
+    id: "12",
     query: "What are the mathematical foundations of backpropagation in neural networks?",
     courseId: "ml_fundamentals_101",
     courseName: "Machine Learning Fundamentals",
@@ -127,7 +189,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
     complexity: "high"
   },
   {
-    id: "7",
+    id: "13",
     query: "Can you explain the difference between supervised and unsupervised learning?",
     courseId: "ml_fundamentals_101",
     courseName: "Machine Learning Fundamentals",
@@ -135,7 +197,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
     complexity: "medium"
   },
   {
-    id: "8",
+    id: "14",
     query: "What is the bias-variance tradeoff and how does it affect model performance?",
     courseId: "ml_fundamentals_101",
     courseName: "Machine Learning Fundamentals",
@@ -145,7 +207,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
 
   // Deep Learning Advanced (Course ID: deep_learning_advanced)
   {
-    id: "9",
+    id: "15",
     query: "How does the transformer architecture work and what makes it effective?",
     courseId: "deep_learning_advanced",
     courseName: "Deep Learning Advanced",
@@ -153,7 +215,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
     complexity: "high"
   },
   {
-    id: "10",
+    id: "16",
     query: "What are the key components of attention mechanisms in deep learning?",
     courseId: "deep_learning_advanced",
     courseName: "Deep Learning Advanced",
@@ -163,7 +225,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
 
   // Data Science Analytics (Course ID: data_science_analytics)
   {
-    id: "11",
+    id: "17",
     query: "How would you design a recommendation system for an e-commerce platform?",
     courseId: "data_science_analytics",
     courseName: "Data Science Analytics",
@@ -171,7 +233,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
     complexity: "high"
   },
   {
-    id: "12",
+    id: "18",
     query: "What preprocessing steps are essential for text data in NLP projects?",
     courseId: "data_science_analytics",
     courseName: "Data Science Analytics",
@@ -181,7 +243,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
 
   // NLP Processing (Course ID: nlp_processing)
   {
-    id: "13",
+    id: "19",
     query: "How would you build a fraud detection system using machine learning?",
     courseId: "nlp_processing",
     courseName: "NLP Processing",
@@ -189,7 +251,7 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
     complexity: "high"
   },
   {
-    id: "14",
+    id: "20",
     query: "What are the main challenges in natural language understanding?",
     courseId: "nlp_processing",
     courseName: "NLP Processing",
@@ -198,8 +260,60 @@ const DEFAULT_TEST_SCENARIOS: TestScenario[] = [
   }
 ];
 
+// Function to generate JWT token for AI service
+const generateJWTToken = (user: { id: string; email: string; name?: string | null; role: string }, serverType: string = "localhost") => {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Determine issuer and audience based on server type
+  const serverConfig = {
+    localhost: {
+      iss: "http://localhost:8080/realms/aanaab",
+      aud: "aanaab-ai"
+    },
+    online: {
+      iss: "https://accounts-testing.aanaab.net/realms/master",
+      aud: "aanaab-ai"
+    },
+    production: {
+      iss: "https://accounts.aanaab.net/realms/master",
+      aud: "aanaab-ai"
+    }
+  };
+
+  const config = serverConfig[serverType as keyof typeof serverConfig] || serverConfig.localhost;
+
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    name: user.name || user.email.split('@')[0],
+    preferred_username: user.email.split('@')[0],
+    email_verified: true,
+    iat: now,
+    exp: now + (24 * 60 * 60), // 24 hours
+    realm_access: {
+      roles: [user.role, "user"]
+    },
+    groups: ["administrators", "users"],
+    iss: config.iss,
+    aud: config.aud,
+    typ: "Bearer",
+    azp: "aanaab-ai",
+    session_state: "test-session-state",
+    acr: "1",
+    scope: "openid email profile"
+  };
+
+  // For development, we'll use a simple base64 encoding
+  // In production, this should use proper JWT signing
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payloadEncoded = btoa(JSON.stringify(payload));
+  const signature = btoa("test-signature");
+
+  return `${header}.${payloadEncoded}.${signature}`;
+};
+
 const DEFAULT_CONFIG: TestConfig = {
-  bearerToken: "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICItUU1pSGRBSEJaRGRiTTZISDlmZ2VLUkFxRzRRVjU4cnFCV2VnNUtJSUdRIn0.eyJleHAiOjE3NTk3NTMzNjEsImlhdCI6MTc1OTc1MjQ2MSwiYXV0aF90aW1lIjoxNzU5NzUyNDYwLCJqdGkiOiI4YjVlZjNiZS03MTBiLTQ3ZTEtOWI0My1mMGQ5MjdlNzcxNWQiLCJpc3MiOiJodHRwczovL2FjY291bnRzLXRlc3RpbmcuYWFuYWFiLm5ldC9yZWFsbXMvbWFzdGVyIiwiYXVkIjoiYWNjb3VudCIsInN1YiI6IjdkNmFkMTE4LTY5NmYtNDVjOC05MDhkLWViMGRmZjg1MDMyMyIsInR5cCI6IkJlYXJlciIsImF6cCI6ImFhbmFhYi1uZXh0Iiwibm9uY2UiOiIyYmU5YzNjMC1iZTFlLTRjMDQtODEwZC1iZTMxZWE5MmQzNmEiLCJzZXNzaW9uX3N0YXRlIjoiMmUzMTZhOGMtZWFjOC00ODUxLWE1ZjItZDQ2ZTMwNzExMTlkIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyJodHRwOi8vbG9jYWxob3N0OjMzMDAiLCJodHRwczovL2FwcC10ZXN0aW5nLmFhbmFhYi5uZXQiLCJodHRwczovL3Rlc3RpbmcuYWFuYWFiLm5ldCIsImh0dHA6Ly9mcm9udGVuZC5hYW5hYWIubG9jYWxob3N0IiwiaHR0cDovL2xvY2FsaG9zdDozMDAxIiwiaHR0cDovL2xvY2FsaG9zdDozMDAwIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLW1hc3RlciIsIm9mZmxpbmVfYWNjZXNzIiwidW1hX2F1dGhvcml6YXRpb24iXX0sInJlc291cmNlX2FjY2VzcyI6eyJhY2NvdW50Ijp7InJvbGVzIjpbIm1hbmFnZS1hY2NvdW50IiwibWFuYWdlLWFjY291bnQtbGlua3MiLCJ2aWV3LXByb2ZpbGUiXX19LCJzY29wZSI6Im9wZW5pZCBwaG9uZSBwcm9maWxlIGVtYWlsIiwic2lkIjoiMmUzMTZhOGMtZWFjOC00ODUxLWE1ZjItZDQ2ZTMwNzExMTlkIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInByZWZlcnJlZF91c2VybmFtZSI6Im1haG1vdWQiLCJnaXZlbl9uYW1lIjoiIiwiZmFtaWx5X25hbWUiOiIiLCJlbWFpbCI6Im1haG1vdWRAZGVzaWducGVlci5jb20ifQ.E0xwjJLHGd8CyUYhixgHlEZJHpQ1yewPsY6sZbxlY_t4HY7aPD_qenfqTeuxbdyNSWk5y4cwudkx4eiHorcZJA-4As_3WlKBMYgnxlRjurLnOFF_A_2oJ9g0On0Zjf1pBUErZmlG5fr-5dU0gXhILzXD9r4YwVE0p3sKzENRU1OLXbcyQtTJ5dMqzX3pJfInaO6z9euiHLJ84Jl7gL53NDL_ICglBBSJY1hE90VfXz7MT8nViPkmll4cBTTrbu6CxdIFsvX7vb2OsS6dwrIJDYC3oxosNdvZMlfIhu2MvIRB0owE0ET62aME_iLuiYmD7j_j00hM6w6cJPi_JfMQLg",
+  bearerToken: "", // Will be populated from session
   baseUrl: "http://localhost:8000",
   serverType: "localhost",
   modelProvider: "openai",
@@ -210,6 +324,7 @@ const DEFAULT_CONFIG: TestConfig = {
 };
 
 export default function TestingPage() {
+  const { data: session, status } = useSession();
   const [config, setConfig] = useState<TestConfig>(DEFAULT_CONFIG);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -225,6 +340,29 @@ export default function TestingPage() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [showQuestionUpload, setShowQuestionUpload] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+
+  // Generate JWT token based on server type and session
+  useEffect(() => {
+    let userToUse = session?.user;
+
+    // For online/testing servers, use mahmoud@designpeer.com
+    if (config.serverType === "online" || config.serverType === "production") {
+      userToUse = {
+        id: "mahmoud-user-001",
+        email: "mahmoud@designpeer.com",
+        name: "Mahmoud",
+        role: "admin"
+      };
+    }
+
+    if (userToUse) {
+      const jwtToken = generateJWTToken(userToUse, config.serverType);
+      setConfig(prev => ({
+        ...prev,
+        bearerToken: jwtToken
+      }));
+    }
+  }, [session, config.serverType]);
 
   // Get current scenarios (custom or default)
   const currentScenarios = useCustomQuestions && customQuestions.length > 0
@@ -303,9 +441,12 @@ export default function TestingPage() {
       return {
         id: `${testType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         testType,
+        endpoint: testType === 'chat' ? 'unified' : 'langgraph',
         query,
         courseId,
         courseName: currentScenarios.find(s => s.courseId === courseId)?.courseName || courseId,
+        category: currentScenarios.find(s => s.courseId === courseId)?.category || 'CUSTOM',
+        complexity: currentScenarios.find(s => s.courseId === courseId)?.complexity || 'medium',
         success: response.ok && (testType === 'chat' ? (data.status === 'success' || data.response) : data.success),
         executionTime,
         response: data.response || data.message || 'No response received',
@@ -318,15 +459,19 @@ export default function TestingPage() {
         toolsUsed: data.tools_used || data.quality_indicators?.tools_used || [],
         confidenceScore: data.confidence_score || 0,
         timestamp,
-        sessionId: sessionId
+        sessionId: sessionId,
+        status: 'completed'
       };
     } catch (error) {
       return {
         id: `${testType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         testType,
+        endpoint: testType === 'chat' ? 'unified' : 'langgraph',
         query,
         courseId,
         courseName: currentScenarios.find(s => s.courseId === courseId)?.courseName || courseId,
+        category: currentScenarios.find(s => s.courseId === courseId)?.category || 'CUSTOM',
+        complexity: currentScenarios.find(s => s.courseId === courseId)?.complexity || 'medium',
         success: false,
         executionTime: (Date.now() - startTime) / 1000,
         response: '',
@@ -336,7 +481,8 @@ export default function TestingPage() {
         costEstimate: 0,
         sourcesCount: 0,
         timestamp,
-        sessionId: sessionId
+        sessionId: sessionId,
+        status: 'error'
       };
     }
   };
@@ -348,23 +494,118 @@ export default function TestingPage() {
     setBatchProgress({ current: 0, total: selectedScenarios.length * 2 }); // 2 tests per scenario (chat + langgraph)
 
     const results: TestResult[] = [];
+    const resultMap = new Map<string, TestResult>();
+
+    // Create initial pending results for both endpoints
+    for (const scenarioId of selectedScenarios) {
+      const scenario = currentScenarios.find(s => s.id === scenarioId);
+      if (!scenario) continue;
+
+      const timestamp = Date.now();
+
+      // Create pending results for both endpoints
+      const chatPendingResult: TestResult = {
+        id: `chat_${scenarioId}_${timestamp}`,
+        testType: 'chat',
+        endpoint: 'unified',
+        query: scenario.query,
+        courseId: scenario.courseId,
+        courseName: scenario.courseName,
+        category: scenario.category,
+        complexity: scenario.complexity,
+        success: false,
+        executionTime: 0,
+        response: '',
+        tokensInput: 0,
+        tokensOutput: 0,
+        costEstimate: 0,
+        sourcesCount: 0,
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+      };
+
+      const langgraphPendingResult: TestResult = {
+        id: `langgraph_${scenarioId}_${timestamp}`,
+        testType: 'langgraph',
+        endpoint: 'langgraph',
+        query: scenario.query,
+        courseId: scenario.courseId,
+        courseName: scenario.courseName,
+        category: scenario.category,
+        complexity: scenario.complexity,
+        success: false,
+        executionTime: 0,
+        response: '',
+        tokensInput: 0,
+        tokensOutput: 0,
+        costEstimate: 0,
+        sourcesCount: 0,
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+      };
+
+      results.push(chatPendingResult, langgraphPendingResult);
+      resultMap.set(`chat_${scenarioId}`, chatPendingResult);
+      resultMap.set(`langgraph_${scenarioId}`, langgraphPendingResult);
+    }
+
+    // Add pending results to show placeholders
+    setTestResults(prev => [...prev, ...results]);
+
+    // Run tests in parallel for each scenario
+    const testPromises: Promise<void>[] = [];
 
     for (const scenarioId of selectedScenarios) {
       const scenario = currentScenarios.find(s => s.id === scenarioId);
       if (!scenario) continue;
 
-      // Run Chat test
-      const chatResult = await runSingleTest(scenario.query, scenario.courseId, 'chat');
-      results.push(chatResult);
-      setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      // Create parallel promises for both endpoints
+      const chatPromise = runSingleTest(scenario.query, scenario.courseId, 'chat')
+        .then(chatResult => {
+          // Update the corresponding result
+          setTestResults(prev => prev.map(r =>
+            r.id.startsWith(`chat_${scenarioId}_`)
+              ? { ...chatResult, endpoint: 'unified', category: scenario.category, complexity: scenario.complexity, status: 'completed' }
+              : r
+          ));
+          setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
+        })
+        .catch(error => {
+          // Update with error
+          setTestResults(prev => prev.map(r =>
+            r.id.startsWith(`chat_${scenarioId}_`)
+              ? { ...r, error: error.message, status: 'error' }
+              : r
+          ));
+          setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
+        });
 
-      // Run LangGraph test
-      const langgraphResult = await runSingleTest(scenario.query, scenario.courseId, 'langgraph');
-      results.push(langgraphResult);
-      setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      const langgraphPromise = runSingleTest(scenario.query, scenario.courseId, 'langgraph')
+        .then(langgraphResult => {
+          // Update the corresponding result
+          setTestResults(prev => prev.map(r =>
+            r.id.startsWith(`langgraph_${scenarioId}_`)
+              ? { ...langgraphResult, endpoint: 'langgraph', category: scenario.category, complexity: scenario.complexity, status: 'completed' }
+              : r
+          ));
+          setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
+        })
+        .catch(error => {
+          // Update with error
+          setTestResults(prev => prev.map(r =>
+            r.id.startsWith(`langgraph_${scenarioId}_`)
+              ? { ...r, error: error.message, status: 'error' }
+              : r
+          ));
+          setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
+        });
+
+      testPromises.push(chatPromise, langgraphPromise);
     }
 
-    setTestResults(prev => [...prev, ...results]);
+    // Wait for all tests to complete
+    await Promise.all(testPromises);
+
     setIsRunning(false);
     setBatchProgress({ current: 0, total: 0 });
   };
@@ -467,8 +708,18 @@ export default function TestingPage() {
     const exportData = {
       metadata: {
         exportDate: new Date().toISOString(),
+        testingDate: new Date().toISOString(),
         totalTests: testResults.length,
-        config: config
+        successCount: testResults.filter(r => r.success).length,
+        errorCount: testResults.filter(r => !r.success).length,
+        avgExecutionTime: testResults.length > 0
+          ? testResults.reduce((sum, r) => sum + r.executionTime, 0) / testResults.length
+          : 0,
+        totalCost: testResults.reduce((sum, r) => sum + (r.costEstimate || 0), 0),
+        totalTokens: testResults.reduce((sum, r) => sum + (r.tokensInput || 0) + (r.tokensOutput || 0), 0),
+        config: config,
+        scenarios: selectedScenarios.map(id => currentScenarios.find(s => s.id === id)).filter(Boolean),
+        results: testResults
       },
       results: testResults
     };
@@ -478,7 +729,7 @@ export default function TestingPage() {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `ai_test_results_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `ai_test_results_${new Date().toISOString().split('T')[0]}_${Date.now()}.json`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -490,6 +741,27 @@ export default function TestingPage() {
     ? testResults.reduce((sum, r) => sum + r.executionTime, 0) / testResults.length
     : 0;
 
+  // Show loading state while session is being loaded
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  // Show error if no session
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Authentication Required</h1>
+          <p className="text-gray-600">Please sign in to access the testing platform.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -499,6 +771,22 @@ export default function TestingPage() {
           <p className="text-gray-600 mt-2">
             Test and compare Chat vs LangGraph systems with custom or predefined questions
           </p>
+          {config.bearerToken && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                <User className="h-3 w-3 mr-1" />
+                {config.serverType === "localhost" ? session?.user?.email : "mahmoud@designpeer.com"}
+                ({config.serverType === "localhost" ? session?.user?.role : "admin"})
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                <Shield className="h-3 w-3 mr-1" />
+                JWT Token Generated
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                🌐 {config.serverType} server
+              </Badge>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button
@@ -560,6 +848,79 @@ export default function TestingPage() {
         />
       )}
 
+      {/* Authentication Status - Simplified */}
+      {config.bearerToken && (
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-900">
+                    {config.serverType === "localhost" ? session?.user?.email : "mahmoud@designpeer.com"}
+                  </p>
+                  <p className="text-sm text-green-700">
+                    {config.serverType === "localhost" ? "Session User" : "Testing User"} • {config.serverType} server
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    let userToUse = session?.user;
+                    if (config.serverType === "online" || config.serverType === "production") {
+                      userToUse = {
+                        id: "mahmoud-user-001",
+                        email: "mahmoud@designpeer.com",
+                        name: "Mahmoud",
+                        role: "admin"
+                      };
+                    }
+                    if (userToUse) {
+                      const newToken = generateJWTToken(userToUse, config.serverType);
+                      setConfig(prev => ({ ...prev, bearerToken: newToken }));
+                    }
+                  }}
+                  className="text-xs"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Regenerate
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (!config.bearerToken) return;
+
+                    try {
+                      const response = await fetch(`${config.baseUrl}/api/v1/chat/health`, {
+                        headers: {
+                          'Authorization': `Bearer ${config.bearerToken}`
+                        }
+                      });
+
+                      if (response.ok) {
+                        alert('✅ Token is valid! API connection successful.');
+                      } else {
+                        alert(`❌ Token validation failed: ${response.status} ${response.statusText}`);
+                      }
+                    } catch (error) {
+                      alert(`❌ Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    }
+                  }}
+                  className="text-xs"
+                >
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Test
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Batch Testing with integrated question upload and results actions */}
       <BatchTesting
         scenarios={currentScenarios}
@@ -582,147 +943,13 @@ export default function TestingPage() {
         onQuestionsChange={handleQuestionsChange}
       />
 
-      {/* Test Results */}
+      {/* Grid Results View */}
       {testResults.length > 0 && (
-        <Card className="bg-white border border-gray-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-gray-900">
-              <BarChart3 className="h-5 w-5" />
-              Test Results
-            </CardTitle>
-            <CardDescription className="text-gray-600">
-              Detailed test execution results
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {testResults.map((result) => (
-                <div key={result.id} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      {result.testType === 'chat' ? (
-                        <MessageSquare className="h-5 w-5 text-blue-500" />
-                      ) : (
-                        <Brain className="h-5 w-5 text-purple-500" />
-                      )}
-                      <div>
-                        <p className="font-medium capitalize">{result.testType} Test</p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(result.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="secondary"
-                        className={result.success ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}
-                      >
-                        {result.success ? (
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                        ) : (
-                          <XCircle className="h-3 w-3 mr-1" />
-                        )}
-                        {result.success ? 'Passed' : 'Failed'}
-                      </Badge>
-                      <span className="text-sm text-gray-600">
-                        {result.executionTime.toFixed(2)}s
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Query:</p>
-                      <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                        {result.query}
-                      </p>
-                    </div>
-
-                    {result.sessionId && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Session ID:</p>
-                        <p className="text-xs font-mono text-gray-500 bg-gray-100 p-2 rounded">
-                          {result.sessionId}
-                        </p>
-                      </div>
-                    )}
-
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Response:</p>
-                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
-                        {result.response}
-                      </div>
-                    </div>
-
-                    {result.error && (
-                      <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                        <strong>Error:</strong> {result.error}
-                      </div>
-                    )}
-
-                    <div className="space-y-3">
-                      {/* Main Stats Row */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">Tokens:</span> {result.tokensInput || 0} → {result.tokensOutput || 0}
-                          {result.tokensInput && result.tokensOutput && (
-                            <span className="text-gray-500 ml-1">({(result.tokensInput + result.tokensOutput)} total)</span>
-                          )}
-                        </div>
-                        <div>
-                          <span className="font-medium">Cost:</span> ${result.costEstimate ? result.costEstimate.toFixed(6) : '0.000000'}
-                        </div>
-                        <div>
-                          <span className="font-medium">Sources:</span> {result.sourcesCount || 0}
-                        </div>
-                        <div>
-                          <span className="font-medium">Confidence:</span> {result.confidenceScore ? (result.confidenceScore * 100).toFixed(1) : '0.0'}%
-                        </div>
-                      </div>
-
-                      {/* Labels Row */}
-                      <div className="flex flex-wrap gap-2">
-                        {result.sources && result.sources.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            <span className="text-xs font-medium text-gray-600">Sources:</span>
-                            {result.sources.slice(0, 3).map((source: any, index: number) => {
-                              const displayName = getSourceDisplayName(source);
-                              return (
-                                <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                                  {displayName}
-                                </span>
-                              );
-                            })}
-                            {result.sources.length > 3 && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
-                                +{result.sources.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {result.toolsUsed && result.toolsUsed.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            <span className="text-xs font-medium text-gray-600">Tools:</span>
-                            {result.toolsUsed.map((tool: string, index: number) => {
-                              // Ensure we only render strings, not objects
-                              const safeTool = typeof tool === 'string' ? tool : `Tool ${index + 1}`;
-                              return (
-                                <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                                  {safeTool}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <GridResults
+          results={testResults}
+          isRunning={isRunning}
+          onExportResults={exportResults}
+        />
       )}
 
       {/* Preview Modal */}

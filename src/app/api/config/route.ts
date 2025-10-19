@@ -117,10 +117,10 @@ export async function PUT(request: NextRequest) {
     // Log audit
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        user_id: session.user.id,
         action: "UPDATE",
         resource: "config",
-        resourceId: section,
+        resource_id: section,
         details: { section, changes: data }
       }
     });

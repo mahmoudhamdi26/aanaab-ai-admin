@@ -31,10 +31,10 @@ export async function POST(request: NextRequest) {
     // Log audit
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        user_id: session.user.id,
         action: "SYNC_START",
         resource: "sync_job",
-        resourceId: jobId,
+        resource_id: jobId,
         details: { syncType, config, courseIds }
       }
     });

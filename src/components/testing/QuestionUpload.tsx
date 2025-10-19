@@ -85,21 +85,60 @@ export function QuestionUpload({ onQuestionsChange, initialQuestions = [] }: Que
         const lines = content.split('\n').filter(line => line.trim());
         if (lines.length < 2) throw new Error('CSV must have at least a header and one data row');
 
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        // Parse CSV properly handling quoted fields
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+
+        const headers = parseCSVLine(lines[0]);
         const queryIndex = headers.findIndex(h => h.toLowerCase().includes('query') || h.toLowerCase().includes('question'));
 
         if (queryIndex === -1) throw new Error('CSV must have a "query" or "question" column');
 
         return lines.slice(1).map((line, index) => {
-          const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-          return {
+          const values = parseCSVLine(line);
+
+          // Find column indices properly
+          const courseIdIndex = headers.findIndex(h => h.toLowerCase().includes('courseid'));
+          const courseNameIndex = headers.findIndex(h => h.toLowerCase().includes('coursename'));
+          const categoryIndex = headers.findIndex(h => h.toLowerCase().includes('category'));
+          const complexityIndex = headers.findIndex(h => h.toLowerCase().includes('complexity'));
+
+          const parsedQuestion = {
             id: `file_${Date.now()}_${index}`,
             query: values[queryIndex] || '',
-            courseId: values[headers.findIndex(h => h.toLowerCase().includes('courseid'))] || "89",
-            courseName: values[headers.findIndex(h => h.toLowerCase().includes('coursename'))] || "Custom Questions",
-            category: values[headers.findIndex(h => h.toLowerCase().includes('category'))] || "CUSTOM",
-            complexity: (values[headers.findIndex(h => h.toLowerCase().includes('complexity'))] as any) || "medium"
+            courseId: courseIdIndex >= 0 ? values[courseIdIndex] : "89",
+            courseName: courseNameIndex >= 0 ? values[courseNameIndex] : "Custom Questions",
+            category: categoryIndex >= 0 ? values[categoryIndex] : "CUSTOM",
+            complexity: (complexityIndex >= 0 ? values[complexityIndex] : "medium") as any
           };
+
+          // Debug logging
+          console.log('CSV Parsing Debug:', {
+            headers,
+            values,
+            courseIdIndex,
+            courseNameIndex,
+            parsedQuestion
+          });
+
+          return parsedQuestion;
         });
       } else {
         throw new Error('Unsupported file format. Please use JSON or CSV.');

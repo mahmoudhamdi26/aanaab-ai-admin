@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Activity, Settings, Database, Shield, Cpu, Zap, RefreshCw, FileText, TestTube, BarChart3, MessageSquare, Mic, LogOut } from "lucide-react";
+import { ChevronDown, Activity, Settings, Database, Shield, Cpu, Zap, RefreshCw, FileText, TestTube, BarChart3, MessageSquare, Mic, LogOut, Wifi, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -42,22 +42,16 @@ const menuItems: MenuItem[] = [
     type: 'main'
   },
   {
-    id: "testing",
-    label: "Testing",
-    icon: TestTube,
-    type: 'main'
-  },
-  {
-    id: "chat",
-    label: "Chat",
-    icon: MessageSquare,
-    type: 'main'
-  },
-  {
-    id: "voice-chat",
-    label: "Voice Chat",
-    icon: Mic,
-    type: 'main'
+    id: "connect",
+    label: "Connect",
+    icon: Wifi,
+    type: 'dropdown',
+    children: [
+      { id: "testing", label: "Testing", icon: TestTube, type: 'main' },
+      { id: "chat", label: "Chat", icon: MessageSquare, type: 'main' },
+      { id: "voice-chat", label: "Voice Chat", icon: Mic, type: 'main' },
+      { id: "results-preview", label: "Results Preview", icon: Eye, type: 'main' }
+    ]
   },
   {
     id: "settings",
@@ -93,8 +87,8 @@ export function NavigationMenu({ activeTab, onTabChange, onSignOut, userName, us
     return false;
   };
 
-  const isSettingsActive = () => {
-    const dropdownItem = menuItems.find(item => item.id === 'settings');
+  const isDropdownActive = (dropdownId: string) => {
+    const dropdownItem = menuItems.find(item => item.id === dropdownId);
     return dropdownItem?.children?.some(child => child.id === activeTab) || false;
   };
 
@@ -111,7 +105,7 @@ export function NavigationMenu({ activeTab, onTabChange, onSignOut, userName, us
                 onClick={() => handleItemClick(item)}
                 className={cn(
                   "flex items-center gap-2 px-4 py-3 h-auto transition-all duration-200 rounded-lg font-medium min-h-[48px] justify-start",
-                  (item.type === 'dropdown' && item.id === 'settings' && isSettingsActive()) ||
+                  (item.type === 'dropdown' && isDropdownActive(item.id)) ||
                     (item.type === 'dropdown' && openDropdown === item.id) ||
                     (item.type !== 'dropdown' && isActive(item.id))
                     ? "bg-[#4A2C8C] text-white hover:bg-[#3a1f6b]"

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useSession } from "next-auth/react";
 import {
   Send,
   Settings,
@@ -22,7 +23,9 @@ import {
   XCircle,
   Loader2,
   History,
-  Users
+  Users,
+  Shield,
+  CheckCircle
 } from "lucide-react";
 
 interface ChatMessage {
@@ -57,6 +60,7 @@ interface ChatConfig {
   includeMetadata: boolean;
   formatMarkdown: boolean;
   language: string;
+  serverType: 'localhost' | 'online' | 'production';
 }
 
 interface ChatSession {
@@ -72,23 +76,27 @@ interface ChatSession {
 const DEFAULT_CONFIG: ChatConfig = {
   endpoint: 'unified',
   baseUrl: "http://localhost:8000",
-  bearerToken: "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICItUU1pSGRBSEJaRGRiTTZISDlmZ2VLUkFxRzRRVjU4cnFCV2VnNUtJSUdRIn0.eyJleHAiOjE3NTk3NTMzNjEsImlhdCI6MTc1OTc1MjQ2MSwiYXV0aF90aW1lIjoxNzU5NzUyNDYwLCJqdGkiOiI4YjVlZjNiZS03MTBiLTQ3ZTEtOWI0My1mMGQ5MjdlNzcxNWQiLCJpc3MiOiJodHRwczovL2FjY291bnRzLXRlc3RpbmcuYWFuYWFiLm5ldC9yZWFsbXMvbWFzdGVyIiwiYXVkIjoiYWNjb3VudCIsInN1YiI6IjdkNmFkMTE4LTY5NmYtNDVjOC05MDhkLWViMGRmZjg1MDMyMyIsInR5cCI6IkJlYXJlciIsImF6cCI6ImFhbmFhYi1uZXh0Iiwibm9uY2UiOiIyYmU5YzNjMC1iZTFlLTRjMDQtODEwZC1iZTMxZWE5MmQzNmEiLCJzZXNzaW9uX3N0YXRlIjoiMmUzMTZhOGMtZWFjOC00ODUxLWE1ZjItZDQ2ZTMwNzExMTlkIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyJodHRwOi8vbG9jYWxob3N0OjMzMDAiLCJodHRwczovL2FwcC10ZXN0aW5nLmFhbmFhYi5uZXQiLCJodHRwczovL3Rlc3RpbmcuYWFuYWFiLm5ldCIsImh0dHA6Ly9mcm9udGVuZC5hYW5hYWIubG9jYWxob3N0IiwiaHR0cDovL2xvY2FsaG9zdDozMDAxIiwiaHR0cDovL2xvY2FsaG9zdDozMDAwIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLW1hc3RlciIsIm9mZmxpbmVfYWNjZXNzIiwidW1hX2F1dGhvcml6YXRpb24iXX0sInJlc291cmNlX2FjY2VzcyI6eyJhY2NvdW50Ijp7InJvbGVzIjpbIm1hbmFnZS1hY2NvdW50IiwibWFuYWdlLWFjY291bnQtbGlua3MiLCJ2aWV3LXByb2ZpbGUiXX19LCJzY29wZSI6Im9wZW5pZCBwaG9uZSBwcm9maWxlIGVtYWlsIiwic2lkIjoiMmUzMTZhOGMtZWFjOC00ODUxLWE1ZjItZDQ2ZTMwNzExMTlkIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInByZWZlcnJlZF91c2VybmFtZSI6Im1haG1vdWQiLCJnaXZlbl9uYW1lIjoiIiwiZmFtaWx5X25hbWUiOiIiLCJlbWFpbCI6Im1haG1vdWRAZGVzaWducGVlci5jb20ifQ.E0xwjJLHGd8CyUYhixgHlEZJHpQ1yewPsY6sZbxlY_t4HY7aPD_qenfqTeuxbdyNSWk5y4cwudkx4eiHorcZJA-4As_3WlKBMYgnxlRjurLnOFF_A_2oJ9g0On0Zjf1pBUErZmlG5fr-5dU0gXhILzXD9r4YwVE0p3sKzENRU1OLXbcyQtTJ5dMqzX3pJfInaO6z9euiHLJ84Jl7gL53NDL_ICglBBSJY1hE90VfXz7MT8nViPkmll4cBTTrbu6CxdIFsvX7vb2OsS6dwrIJDYC3oxosNdvZMlfIhu2MvIRB0owE0ET62aME_iLuiYmD7j_j00hM6w6cJPi_JfMQLg",
+  bearerToken: "", // Will be populated from session
   courseId: "89",
   sessionId: "550e8400-e29b-41d4-a716-446655440000",
   modelProvider: "auto",
   model: "auto",
   temperature: 0.7,
   maxTokens: 1000,
-  mode: "rag",
+  mode: "context_aware",
   transport: "http",
   includeSources: true,
   includeMetadata: false,
   formatMarkdown: true,
-  language: "auto"
+  language: "auto",
+  serverType: "localhost"
 };
 
 const COURSE_OPTIONS = [
-  { id: "89", name: "Educational Games" },
+  { id: "89", name: "التعلم باللعب" },
+  { id: "62", name: "طرق التدريس الحديثة" },
+  { id: "61", name: "إعداد الأدوات التعليمية" },
+  { id: "64", name: "عقلية النمو" },
   { id: "deep_learning_advanced", name: "Deep Learning Advanced" },
   { id: "ml_fundamentals_101", name: "ML Fundamentals" },
   { id: "data_science_analytics", name: "Data Science Analytics" },
@@ -227,6 +235,58 @@ const getModelFromProvider = (provider: string, model: string): string => {
   return model;
 };
 
+// Function to generate JWT token for AI service
+const generateJWTToken = (user: { id: string; email: string; name?: string | null; role: string }, serverType: string = "localhost") => {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Determine issuer and audience based on server type
+  const serverConfig = {
+    localhost: {
+      iss: "http://localhost:8080/realms/aanaab",
+      aud: "aanaab-ai"
+    },
+    online: {
+      iss: "https://accounts-testing.aanaab.net/realms/master",
+      aud: "aanaab-ai"
+    },
+    production: {
+      iss: "https://accounts.aanaab.net/realms/master",
+      aud: "aanaab-ai"
+    }
+  };
+
+  const config = serverConfig[serverType as keyof typeof serverConfig] || serverConfig.localhost;
+
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    name: user.name || user.email.split('@')[0],
+    preferred_username: user.email.split('@')[0],
+    email_verified: true,
+    iat: now,
+    exp: now + (24 * 60 * 60), // 24 hours
+    realm_access: {
+      roles: [user.role, "user"]
+    },
+    groups: ["administrators", "users"],
+    iss: config.iss,
+    aud: config.aud,
+    typ: "Bearer",
+    azp: "aanaab-ai",
+    session_state: "test-session-state",
+    acr: "1",
+    scope: "openid email profile"
+  };
+
+  // For development, we'll use a simple base64 encoding
+  // In production, this should use proper JWT signing
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payloadEncoded = btoa(JSON.stringify(payload));
+  const signature = btoa("test-signature");
+
+  return `${header}.${payloadEncoded}.${signature}`;
+};
+
 // Improved token estimation (more accurate approximation)
 const estimateTokens = (text: string): number => {
   if (!text || text.length === 0) return 0;
@@ -360,6 +420,7 @@ const ENDPOINT_CONFIGS = {
 };
 
 export default function ChatPage() {
+  const { data: session, status } = useSession();
   const [config, setConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -379,6 +440,46 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
+
+  // Generate JWT token based on server type and session
+  useEffect(() => {
+    let userToUse = session?.user;
+
+    // For online/testing servers, use mahmoud@designpeer.com
+    if (config.serverType === "online" || config.serverType === "production") {
+      userToUse = {
+        id: "mahmoud-user-001",
+        email: "mahmoud@designpeer.com",
+        name: "Mahmoud",
+        role: "admin"
+      };
+    }
+
+    if (userToUse) {
+      const jwtToken = generateJWTToken(userToUse, config.serverType);
+      setConfig(prev => ({
+        ...prev,
+        bearerToken: jwtToken
+      }));
+    }
+  }, [session, config.serverType]);
+
+  // Update base URL when server type changes
+  useEffect(() => {
+    const serverUrls = {
+      localhost: "http://localhost:8000",
+      online: "https://api-testing.aanaab.net",
+      production: "https://api.aanaab.net"
+    };
+
+    const newBaseUrl = serverUrls[config.serverType];
+    if (newBaseUrl && newBaseUrl !== config.baseUrl) {
+      setConfig(prev => ({
+        ...prev,
+        baseUrl: newBaseUrl
+      }));
+    }
+  }, [config.serverType]);
 
   // Initialize with a default session
   useEffect(() => {
@@ -698,6 +799,31 @@ export default function ChatPage() {
   const totalOutputTokens = messages.reduce((sum: number, msg: ChatMessage) => sum + (msg.outputTokens || 0), 0);
   const totalCost = messages.reduce((sum: number, msg: ChatMessage) => sum + (msg.cost || 0), 0);
 
+  // Show loading state while session is loading
+  if (status === "loading") {
+    return (
+      <div className="h-[calc(100vh-120px)] flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show authentication required if no session
+  if (status === "unauthenticated") {
+    return (
+      <div className="h-[calc(100vh-120px)] flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Authentication Required</h3>
+          <p className="text-gray-600">Please sign in to use the chat interface.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col bg-gray-50">
       {/* Header */}
@@ -996,6 +1122,38 @@ export default function ChatPage() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
+                      <Label htmlFor="serverType">Server Type</Label>
+                      <Select
+                        value={config.serverType}
+                        onValueChange={(value: 'localhost' | 'online' | 'production') =>
+                          setConfig(prev => ({ ...prev, serverType: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="localhost">Localhost (Development)</SelectItem>
+                          <SelectItem value="online">Online (Testing)</SelectItem>
+                          <SelectItem value="production">Production</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="baseUrl">Base URL</Label>
+                      <Input
+                        id="baseUrl"
+                        value={config.baseUrl}
+                        onChange={(e) => setConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
+                        placeholder="http://localhost:8000"
+                      />
+                      <p className="text-xs text-gray-500">
+                        Auto-updates based on server type selection
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
                       <Label htmlFor="endpoint">Chat Endpoint</Label>
                       <Select
                         value={config.endpoint}
@@ -1011,16 +1169,6 @@ export default function ChatPage() {
                           <SelectItem value="langgraph">LangGraph Chat</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="baseUrl">Base URL</Label>
-                      <Input
-                        id="baseUrl"
-                        value={config.baseUrl}
-                        onChange={(e) => setConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
-                        placeholder="http://localhost:8000"
-                      />
                     </div>
 
                     <div className="space-y-2">
@@ -1054,6 +1202,24 @@ export default function ChatPage() {
                         <SelectContent>
                           <SelectItem value="http">HTTP</SelectItem>
                           <SelectItem value="stream">Streaming</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="mode">Chat Mode</Label>
+                      <Select
+                        value={config.mode}
+                        onValueChange={(value) => setConfig(prev => ({ ...prev, mode: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="standard">Standard</SelectItem>
+                          <SelectItem value="rag">RAG</SelectItem>
+                          <SelectItem value="personalized">Personalized</SelectItem>
+                          <SelectItem value="context_aware">Context Aware</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1101,24 +1267,6 @@ export default function ChatPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="mode">Chat Mode</Label>
-                      <Select
-                        value={config.mode}
-                        onValueChange={(value) => setConfig(prev => ({ ...prev, mode: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="standard">Standard</SelectItem>
-                          <SelectItem value="rag">RAG</SelectItem>
-                          <SelectItem value="personalized">Personalized</SelectItem>
-                          <SelectItem value="context_aware">Context Aware</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
                       <Label htmlFor="temperature">Temperature</Label>
                       <Input
                         id="temperature"
@@ -1151,10 +1299,10 @@ export default function ChatPage() {
                       value={config.bearerToken}
                       onChange={(e) => setConfig(prev => ({ ...prev, bearerToken: e.target.value }))}
                       rows={3}
-                      placeholder="Enter your JWT bearer token"
+                      placeholder="JWT token will be auto-generated based on server type"
                     />
                     <p className="text-xs text-gray-500">
-                      Using default testing token. Replace with your own JWT token.
+                      Auto-generated based on server type and user session. Token updates automatically when you change server type.
                     </p>
                   </div>
 
@@ -1182,6 +1330,81 @@ export default function ChatPage() {
                         onCheckedChange={(checked) => setConfig(prev => ({ ...prev, formatMarkdown: checked }))}
                       />
                       <Label htmlFor="formatMarkdown">Format Markdown</Label>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Authentication Status - Simplified */}
+          {config.bearerToken && (
+            <div className="bg-white border-b p-4">
+              <Card className="bg-green-50 border-green-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Shield className="h-5 w-5 text-green-600" />
+                      <div>
+                        <p className="font-medium text-green-900">
+                          {config.serverType === "localhost" ? session?.user?.email : "mahmoud@designpeer.com"}
+                        </p>
+                        <p className="text-sm text-green-700">
+                          {config.serverType === "localhost" ? "Session User" : "Testing User"} • {config.serverType} server
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          let userToUse = session?.user;
+                          if (config.serverType === "online" || config.serverType === "production") {
+                            userToUse = {
+                              id: "mahmoud-user-001",
+                              email: "mahmoud@designpeer.com",
+                              name: "Mahmoud",
+                              role: "admin"
+                            };
+                          }
+                          if (userToUse) {
+                            const newToken = generateJWTToken(userToUse, config.serverType);
+                            setConfig(prev => ({ ...prev, bearerToken: newToken }));
+                          }
+                        }}
+                        className="text-xs"
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        Regenerate
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!config.bearerToken) return;
+
+                          try {
+                            const response = await fetch(`${config.baseUrl}/api/v1/chat/health`, {
+                              headers: {
+                                'Authorization': `Bearer ${config.bearerToken}`
+                              }
+                            });
+
+                            if (response.ok) {
+                              alert('✅ Token is valid! API connection successful.');
+                            } else {
+                              alert(`❌ Token validation failed: ${response.status} ${response.statusText}`);
+                            }
+                          } catch (error) {
+                            alert(`❌ Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                          }
+                        }}
+                        className="text-xs"
+                      >
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Test
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

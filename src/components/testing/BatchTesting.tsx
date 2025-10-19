@@ -62,7 +62,7 @@ export function BatchTesting({
   const availableCourses = Array.from(new Set(scenarios.map(s => s.courseId))).map(courseId => {
     const scenario = scenarios.find(s => s.courseId === courseId);
     return { id: courseId, name: scenario?.courseName || courseId };
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   const getFilteredScenarios = () => {
     if (selectedCourseFilter === "all") {
